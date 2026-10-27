@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reading Tracker</title>
+  <style>
+    :root {
+      --bg: #f7f5f0;
+      --surface: #ffffff;
+      --text: #1f1d1a;
+      --muted: #6b665e;
+      --border: #e3ded4;
+      --accent: #2f6f5e;
+      --accent-soft: #e2efe9;
+      --danger: #b3403a;
+      --star: #d99a1e;
+      --radius: 10px;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 2px 8px rgba(0, 0, 0, .04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161514;
+        --surface: #201f1d;
+        --text: #ece8e1;
+        --muted: #9c968c;
+        --border: #34312d;
+        --accent: #6cbfa6;
+        --accent-soft: #23352f;
+        --danger: #e07a73;
+        --star: #e8b34a;
+        --shadow: none;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+
+    header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 1.6rem; letter-spacing: -.01em; }
+
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 7px 12px;
+    }
+    button:hover { border-color: var(--muted); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+    button.danger { color: var(--danger); }
+    button.link { border: none; background: none; padding: 4px 6px; color: var(--muted); }
+    button.link:hover { color: var(--text); }
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+    .stat .label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+    .stat .value { font-size: 1.6rem; font-weight: 650; }
+    .stat .sub { color: var(--muted); font-size: .85rem; }
+
+    /* Toolbar */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+    .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; overflow-x: auto; }
+    .tabs button { border: none; background: none; padding: 6px 10px; border-radius: 7px; white-space: nowrap; color: var(--muted); }
+    .tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+    .toolbar .search { flex: 1 1 180px; }
+    .toolbar select { width: auto; }
+
+    /* Book list */
+    .books { display: grid; gap: 12px; }
+    .book {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 16px; box-shadow: var(--shadow);
+      display: flex; gap: 14px; align-items: flex-start;
+    }
+    .book-body { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
+    .cover {
+      flex: none; width: 48px; height: 72px; border-radius: 4px;
+      object-fit: cover; background: var(--border);
+    }
+    .cover.placeholder {
+      display: grid; place-items: center;
+      background: var(--accent-soft); color: var(--accent); font-weight: 650; font-size: 1.3rem;
+    }
+    .book h3 { margin: 0; font-size: 1.05rem; }
+    .book h3, .book .author, .book .notes { overflow-wrap: anywhere; }
+    .book .author { color: var(--muted); }
+    .book .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: .85rem; align-items: center; }
+    .book .notes { grid-column: 1 / -1; margin: 4px 0 0; white-space: pre-wrap; font-size: .9rem; }
+    .book .actions { display: flex; gap: 2px; align-items: flex-start; }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .75rem; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+    .badge.want { background: var(--border); color: var(--muted); }
+    .badge.dnf { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .stars { color: var(--star); letter-spacing: 1px; }
+
+    @keyframes book-in {
+      from { opacity: 0; transform: translateY(6px); }
+    }
+    .book.added { animation: book-in .25s ease-out; }
+    @media (prefers-reduced-motion: reduce) {
+      .book.added { animation: none; }
+    }
+
+    .progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+    .bar { flex: 1; height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--accent); }
+    .progress input { width: 80px; padding: 4px 8px; }
+    .progress .pct { font-size: .85rem; color: var(--muted); min-width: 3.5em; text-align: right; }
+
+    .notice {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+      margin-bottom: 16px; padding: 12px 14px; border-radius: var(--radius);
+      border: 1px solid var(--danger); background: var(--surface); color: var(--text);
+    }
+    .notice-actions { display: flex; gap: 8px; }
+
+    .empty { text-align: center; color: var(--muted); padding: 48px 16px; border: 1px dashed var(--border); border-radius: var(--radius); }
+
+    footer { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+    /* Dialog */
+    dialog {
+      border: 1px solid var(--border); border-radius: 14px; padding: 0;
+      background: var(--surface); color: var(--text);
+      width: min(520px, calc(100vw - 32px));
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, .4); }
+    dialog form { padding: 20px; display: grid; gap: 12px; }
+    dialog h2 { margin: 0 0 4px; font-size: 1.2rem; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label, .field { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+    .rating-input { display: flex; gap: 2px; }
+    .rating-input button { border: none; background: none; padding: 0 2px; font-size: 1.4rem; line-height: 1; color: var(--border); }
+    .rating-input button.on { color: var(--star); }
+    .optional { font-weight: normal; opacity: .8; }
+    .cover-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cover-choice {
+      width: 56px; height: 84px; padding: 0; overflow: hidden; border-radius: 6px;
+      display: grid; place-items: center; font-size: .75rem; color: var(--muted);
+    }
+    .cover-choice img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cover-choice[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 1px; }
+    .cover-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+    .cover-status button.link { padding: 0; color: var(--accent); }
+    .dialog-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+    .dialog-actions div { display: flex; gap: 8px; margin-left: auto; }
+
+    @media (max-width: 520px) {
+      input, select, textarea { font-size: 16px; } /* below 16px, iOS Safari zooms in on focus */
+      .row { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stat { padding: 10px 12px; }
+      .stat .label { font-size: .7rem; }
+      .stat .value { font-size: 1.3rem; }
+      .book-body { grid-template-columns: 1fr; }
+      /* Buttons get their own row under the details instead of overlapping the title */
+      .book .actions { order: 1; margin-left: -6px; }
+      .book .progress, .book .notes { order: 2; }
+      .cover { width: 40px; height: 60px; }
+    }
+
+    /* Bigger tap targets on touch screens */
+    @media (pointer: coarse) {
+      button.link { padding: 10px 12px; }
+      .rating-input button { padding: 6px 5px; font-size: 1.7rem; }
+      .tabs button { padding: 10px 12px; }
+    }
+    @media (pointer: coarse) and (max-width: 520px) {
+      .book .actions { margin-left: -12px; } /* line the bigger buttons' text up with the title */
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="notice" id="notice" role="alert" hidden>
+      <span id="noticeText"></span>
+      <div class="notice-actions" id="noticeActions"></div>
+    </div>
+
+    <header>
+      <h1>📚 Reading Tracker</h1>
+      <button class="primary" id="addBtn">+ Add book</button>
+    </header>
+
+    <section class="stats" id="stats"></section>
+
+    <div class="toolbar">
+      <div class="tabs" id="tabs" role="group" aria-label="Filter by status"></div>
+      <input class="search" id="search" type="search" placeholder="Search title or author…">
+      <select id="sort" aria-label="Sort">
+        <option value="updated">Recently updated</option>
+        <option value="title">Title</option>
+        <option value="author">Author</option>
+        <option value="rating">Rating</option>
+        <option value="progress">Progress</option>
+      </select>
+    </div>
+
+    <section class="books" id="books"></section>
+
+    <footer>
+      <button class="link" id="exportBtn">Export JSON</button>
+      <button class="link" id="exportCsvBtn">Export CSV</button>
+      <button class="link" id="importBtn">Import JSON</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </footer>
+  </main>
+
+  <dialog id="bookDialog">
+    <form method="dialog" id="bookForm">
+      <h2 id="dialogTitle">Add book</h2>
+      <label>Title<input name="title" required></label>
+      <div class="row">
+        <label>Author<input name="author"></label>
+        <label>ISBN <span class="optional">(optional)</span><input name="isbn" autocomplete="off"></label>
+      </div>
+      <div class="field">
+        <span id="coverLabel">Cover</span>
+        <div class="cover-picker" id="coverPicker" role="group" aria-labelledby="coverLabel"></div>
+        <div class="cover-status">
+          <span id="coverStatus" aria-live="polite"></span>
+          <button type="button" class="link" id="coverSearchBtn">Search again</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Status
+          <select name="status">
+            <option value="want">Want to read</option>
+            <option value="reading">Reading</option>
+            <option value="finished">Finished</option>
+            <option value="dnf">Did not finish</option>
+          </select>
+        </label>
+        <div class="field">
+          <span id="ratingLabel">Rating</span>
+          <div class="rating-input" id="ratingInput" role="group" aria-labelledby="ratingLabel"></div>
+        </div>
+      </div>
+      <div class="row">
+        <label>Total pages<input name="pages" type="number" min="0" inputmode="numeric"></label>
+        <label>Current page<input name="currentPage" type="number" min="0" inputmode="numeric"></label>
+      </div>
+      <div class="row" id="readRow">
+        <label>Read month<select name="readMonth"></select></label>
+        <label>Read year<select name="readYear"></select></label>
+      </div>
+      <label>Notes<textarea name="notes" rows="3"></textarea></label>
+      <div class="dialog-actions">
+        <button type="button" class="danger" id="deleteBtn">Delete</button>
+        <div>
+          <button type="button" id="cancelBtn">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const STORAGE_KEY = 'reading-tracker:v1';
+    const STATUSES = {
+      all: 'All',
+      reading: 'Reading',
+      want: 'Want to read',
+      finished: 'Finished',
+      dnf: 'Did not finish',
+    };
+    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    const OPEN_LIBRARY = 'https://openlibrary.org';
+    const MAX_COVER_CHOICES = 6;
+
+    const $ = (sel) => document.querySelector(sel);
+    const els = {
+      stats: $('#stats'),
+      tabs: $('#tabs'),
+      search: $('#search'),
+      sort: $('#sort'),
+      books: $('#books'),
+      dialog: $('#bookDialog'),
+      form: $('#bookForm'),
+      dialogTitle: $('#dialogTitle'),
+      ratingInput: $('#ratingInput'),
+      readRow: $('#readRow'),
+      coverPicker: $('#coverPicker'),
+      coverStatus: $('#coverStatus'),
+      coverSearchBtn: $('#coverSearchBtn'),
+      deleteBtn: $('#deleteBtn'),
+      importFile: $('#importFile'),
+      notice: $('#notice'),
+      noticeText: $('#noticeText'),
+      noticeActions: $('#noticeActions'),
+    };
+
+    // ---------- State ----------
+
+    let unreadableData = null; // raw saved text that couldn't be parsed, offered as a download
+    let state = load();
+    let filter = 'all';
+    let editingId = null;
+    let formRating = 0;
+    let lastAddedId = null; // animated once on the next render
+
+    // Cover choices in the open dialog
+    let formCoverId = null;
+    let formCoverChoices = [];
+    let formCoverSearched = false; // a search finished, so the result is the user's call
+    let formCoverPicked = false;   // the user clicked a choice, so don't preselect over it
+    let coverSearch = null;        // AbortController for the in-flight search
+
+    function load() {
+      let raw;
+      try {
+        raw = localStorage.getItem(STORAGE_KEY);
+      } catch (e) {
+        return { books: [] }; // storage blocked; checkStorage() warns about it
+      }
+      if (raw === null) return { books: [] };
+      try {
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data?.books)) throw new Error('No books list');
+        return { books: normalize(data).books };
+      } catch (e) {
+        // Keep a copy before the next save overwrites it.
+        unreadableData = raw;
+        try { localStorage.setItem(`${STORAGE_KEY}:unreadable-${Date.now()}`, raw); } catch (e2) { /* full */ }
+        return { books: [] };
+      }
+    }
+
+    function text(value) {
+      return typeof value === 'string' ? value.trim() : '';
+    }
+
+    function count(value) {
+      const n = Math.floor(Number(value));
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+
+    // Turns saved or imported data into clean book records: drops books without a title,
+    // fixes bad values, and converts the older started/finished dates to a `read` month.
+    function normalize(data) {
+      const books = [];
+      const ids = new Set();
+      let skipped = 0;
+      for (const raw of data.books) {
+        const title = text(raw?.title);
+        if (!title) {
+          skipped++;
+          continue;
+        }
+        const status = raw.status in STATUSES && raw.status !== 'all' ? raw.status : 'want';
+        const monthRe = /^\d{4}-(0[1-9]|1[0-2])/;
+        const read = [raw.read, raw.finished].find((d) => typeof d === 'string' && monthRe.test(d));
+        const pages = count(raw.pages);
+        const id = typeof raw.id === 'string' && raw.id && !ids.has(raw.id) ? raw.id : uid();
+        ids.add(id);
+        books.push({
+          id,
+          title,
+          author: text(raw.author),
+          isbn: cleanIsbn(raw.isbn),
+          coverId: count(raw.coverId) || null,
+          coverChecked: raw.coverChecked === true,
+          status,
+          pages,
+          currentPage: pages ? Math.min(count(raw.currentPage), pages) : count(raw.currentPage),
+          read: status === 'finished' && read ? read.slice(0, 7) : '',
+          notes: text(raw.notes),
+          rating: [1, 2, 3, 4, 5].includes(raw.rating) ? raw.rating : 0,
+          createdAt: count(raw.createdAt) || Date.now(),
+          updatedAt: count(raw.updatedAt) || Date.now(),
+        });
+      }
+      return { books, skipped };
+    }
+
+    function save() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        if (noticeKind === 'save-failed') hideNotice();
+        return true;
+      } catch (e) {
+        showSaveFailed();
+        return false;
+      }
+    }
+
+    // Warn up front if this browser won't let us save at all.
+    function checkStorage() {
+      try {
+        localStorage.setItem(`${STORAGE_KEY}:test`, '1');
+        localStorage.removeItem(`${STORAGE_KEY}:test`);
+      } catch (e) {
+        showSaveFailed();
+      }
+    }
+
+    // ---------- Warning bar ----------
+
+    let noticeKind = null;
+
+    function showNotice(kind, message, actions) {
+      noticeKind = kind;
+      els.noticeText.textContent = message;
+      els.noticeActions.replaceChildren(...actions.map(({ label, onClick }) => {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.addEventListener('click', onClick);
+        return btn;
+      }));
+      els.notice.hidden = false;
+    }
+
+    function hideNotice() {
+      noticeKind = null;
+      els.notice.hidden = true;
+    }
+
+    function showSaveFailed() {
+      showNotice('save-failed',
+        'Changes can’t be saved: this browser’s storage is full or blocked. ' +
+        'They’ll be lost when you refresh or close this page, so export a backup.',
+        [{ label: 'Export backup', onClick: exportJson }]);
+    }
+
+    function showUnreadable() {
+      showNotice('unreadable',
+        'Your saved books couldn’t be read, so the list started empty. A copy of the old data was kept.',
+        [
+          { label: 'Download old data', onClick: () => download(unreadableData, `reading-tracker-unreadable-${today()}.txt`, 'text/plain') },
+          { label: 'Dismiss', onClick: hideNotice },
+        ]);
+    }
+
+    function today() {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); // local date, not UTC
+      return d.toISOString().slice(0, 10);
+    }
+
+    function thisMonth() {
+      return today().slice(0, 7);
+    }
+
+    function formatRead(read) {
+      const [y, m] = read.split('-');
+      return `${MONTHS[Number(m) - 1]} ${y}`;
+    }
+
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[c]);
+    }
+
+    // ---------- Covers (Open Library) ----------
+
+    function coverUrl(coverId) {
+      return `https://covers.openlibrary.org/b/id/${coverId}-M.jpg`;
+    }
+
+    function cleanIsbn(value) {
+      return String(value || '').replace(/[^0-9xX]/g, '').toUpperCase();
+    }
+
+    // Returns up to MAX_COVER_CHOICES cover ids, exact-edition (ISBN) matches first.
+    async function findCovers({ title, author, isbn }, signal) {
+      const ids = [];
+      if (isbn.length === 10 || isbn.length === 13) {
+        const res = await fetch(`${OPEN_LIBRARY}/isbn/${isbn}.json`, { signal });
+        if (res.ok) ids.push(...((await res.json()).covers || []));
+      }
+      if (title) {
+        const params = new URLSearchParams({ title, fields: 'cover_i', limit: '20' });
+        if (author) params.set('author', author);
+        const res = await fetch(`${OPEN_LIBRARY}/search.json?${params}`, { signal });
+        if (!res.ok) throw new Error(`Open Library returned ${res.status}`);
+        ids.push(...(await res.json()).docs.map((d) => d.cover_i));
+      }
+      return [...new Set(ids.filter((id) => id > 0))].slice(0, MAX_COVER_CHOICES);
+    }
+
+    function placeholderHtml(id, initial) {
+      return `<div class="cover placeholder" data-cover-for="${id}" aria-hidden="true">${initial}</div>`;
+    }
+
+    function coverHtml(b) {
+      const initial = escapeHtml(([...b.title.trim()][0] || '?').toUpperCase());
+      return b.coverId
+        ? `<img class="cover" data-cover-for="${b.id}" data-initial="${initial}" src="${coverUrl(b.coverId)}" alt="" loading="lazy">`
+        : placeholderHtml(b.id, initial);
+    }
+
+    // Swap one card's cover in place, without re-rendering the list.
+    function refreshCover(book) {
+      const el = els.books.querySelector(`[data-cover-for="${book.id}"]`);
+      if (el) el.outerHTML = coverHtml(book);
+    }
+
+    // Look up covers for books that have never been searched, one at a time.
+    // Re-reads state each round, so books added or imported mid-run are picked up too.
+    let backfilling = false;
+    async function backfillCovers() {
+      if (backfilling) return;
+      backfilling = true;
+      const tried = new Set();
+      try {
+        let book;
+        while ((book = state.books.find((b) => !b.coverChecked && !b.coverId && !tried.has(b.id)))) {
+          tried.add(book.id);
+          let coverId;
+          try {
+            [coverId] = await findCovers({ title: book.title, author: book.author || '', isbn: book.isbn || '' });
+          } catch (e) {
+            return; // offline or Open Library is down; try again next visit
+          }
+          // Skip if the book was deleted, replaced by an import, or saved from the dialog meanwhile.
+          if (findBook(book.id) !== book || book.coverChecked) continue;
+          book.coverId = coverId ?? null;
+          book.coverChecked = true;
+          save();
+          refreshCover(book);
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      } finally {
+        backfilling = false;
+      }
+    }
+
+    function progressOf(book) {
+      if (book.status === 'finished') return 100;
+      if (!book.pages) return 0;
+      return Math.min(100, Math.round((book.currentPage || 0) / book.pages * 100));
+    }
+
+    // ---------- Rendering ----------
+
+    function render() {
+      renderStats();
+      renderTabs();
+      renderBooks();
+    }
+
+    function renderStats() {
+      const year = new Date().getFullYear();
+      const books = state.books;
+      const finished = books.filter((b) => b.status === 'finished');
+      const finishedThisYear = finished.filter((b) => b.read && b.read.startsWith(String(year))).length;
+      const reading = books.filter((b) => b.status === 'reading').length;
+      const rated = books.filter((b) => b.rating > 0);
+      const avgRating = rated.length
+        ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(1)
+        : '–';
+
+      els.stats.innerHTML = `
+        <div class="stat"><div class="label">Total books read</div><div class="value">${finished.length}</div>
+          <div class="sub">${finishedThisYear} this year</div></div>
+        <div class="stat"><div class="label">Reading now</div><div class="value">${reading}</div></div>
+        <div class="stat"><div class="label">Avg rating</div><div class="value">${avgRating}</div>
+          <div class="sub">${rated.length} rated</div></div>
+      `;
+    }
+
+    function renderTabs() {
+      els.tabs.innerHTML = Object.entries(STATUSES).map(([key, label]) => {
+        const count = key === 'all'
+          ? state.books.length
+          : state.books.filter((b) => b.status === key).length;
+        return `<button data-filter="${key}" aria-pressed="${filter === key}">${label} (${count})</button>`;
+      }).join('');
+    }
+
+    function visibleBooks() {
+      const q = els.search.value.trim().toLowerCase();
+      const list = state.books.filter((b) => {
+        if (filter !== 'all' && b.status !== filter) return false;
+        if (!q) return true;
+        return (b.title + ' ' + (b.author || '')).toLowerCase().includes(q);
+      });
+      return sortBooks(list);
+    }
+
+    // Sorts in place by the order picked in the toolbar.
+    function sortBooks(list) {
+      const by = els.sort.value;
+      const cmp = {
+        updated: (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0),
+        title: (a, b) => a.title.localeCompare(b.title),
+        author: (a, b) => (a.author || '').localeCompare(b.author || ''),
+        rating: (a, b) => (b.rating || 0) - (a.rating || 0),
+        progress: (a, b) => progressOf(b) - progressOf(a),
+      }[by];
+      return list.sort(cmp);
+    }
+
+    function stars(n) {
+      return n ? `<span class="stars" aria-label="${n} of 5 stars">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>` : '';
+    }
+
+    function renderBooks() {
+      const list = visibleBooks();
+      if (!list.length) {
+        els.books.innerHTML = `<div class="empty">${
+          state.books.length ? 'No books match.' : 'No books yet — add the first one!'
+        }</div>`;
+        return;
+      }
+
+      els.books.innerHTML = list.map((b) => {
+        const pct = progressOf(b);
+        const progress = b.status === 'reading' ? `
+          <div class="progress">
+            <div class="bar"><span style="width:${pct}%"></span></div>
+            <input type="number" min="0" ${b.pages ? `max="${b.pages}"` : ''} value="${b.currentPage || 0}"
+              data-page="${b.id}" aria-label="Current page">
+            <span class="pct">${b.pages ? `${pct}%` : 'p.'}</span>
+          </div>` : '';
+
+        return `
+          <article class="book${b.id === lastAddedId ? ' added' : ''}">
+            ${coverHtml(b)}
+            <div class="book-body">
+            <div>
+              <h3>${escapeHtml(b.title)}</h3>
+              ${b.author ? `<div class="author">${escapeHtml(b.author)}</div>` : ''}
+            </div>
+            <div class="actions">
+              ${b.status === 'want' ? `<button class="link" data-start="${b.id}">Start</button>` : ''}
+              ${b.status === 'reading' ? `<button class="link" data-finish="${b.id}">Finish</button>` : ''}
+              <button class="link" data-edit="${b.id}">Edit</button>
+            </div>
+            <div class="meta">
+              <span class="badge ${b.status}">${STATUSES[b.status]}</span>
+              ${stars(b.rating)}
+              ${b.pages ? `<span>${b.pages} pages</span>` : ''}
+              ${b.status === 'finished' && b.read ? `<span>Read ${formatRead(b.read)}</span>` : ''}
+            </div>
+            ${progress}
+            ${b.notes ? `<p class="notes">${escapeHtml(b.notes)}</p>` : ''}
+            </div>
+          </article>`;
+      }).join('');
+      lastAddedId = null;
+    }
+
+    // ---------- Book actions ----------
+
+    function findBook(id) {
+      return state.books.find((b) => b.id === id);
+    }
+
+    function updateBook(id, changes) {
+      const book = findBook(id);
+      if (!book) return;
+      Object.assign(book, changes, { updatedAt: Date.now() });
+      save();
+      render();
+    }
+
+    els.books.addEventListener('click', (e) => {
+      const t = e.target.closest('button');
+      if (!t) return;
+      if (t.dataset.edit) openDialog(t.dataset.edit);
+      if (t.dataset.start) updateBook(t.dataset.start, { status: 'reading' });
+      if (t.dataset.finish) {
+        const book = findBook(t.dataset.finish);
+        updateBook(book.id, { status: 'finished', read: thisMonth(), currentPage: book.pages || book.currentPage });
+        openDialog(book.id); // prompt for a rating / notes
+      }
+    });
+
+    // Broken cover images fall back to the letter tile. (`error` doesn't bubble, so capture it.)
+    els.books.addEventListener('error', (e) => {
+      const img = e.target;
+      if (img.matches?.('img.cover')) img.outerHTML = placeholderHtml(img.dataset.coverFor, escapeHtml(img.dataset.initial));
+    }, true);
+
+    els.books.addEventListener('change', (e) => {
+      const id = e.target.dataset.page;
+      if (!id) return;
+      const book = findBook(id);
+      let page = Math.max(0, parseInt(e.target.value, 10) || 0);
+      if (book.pages) page = Math.min(page, book.pages);
+      updateBook(id, { currentPage: page });
+    });
+
+    // ---------- Dialog ----------
+
+    // Star buttons are created once; clicks only toggle their classes.
+    els.ratingInput.innerHTML = [1, 2, 3, 4, 5].map((n) =>
+      `<button type="button" data-rate="${n}" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`
+    ).join('');
+
+    function renderRatingInput() {
+      els.ratingInput.querySelectorAll('button').forEach((btn) => {
+        const n = Number(btn.dataset.rate);
+        btn.classList.toggle('on', n <= formRating);
+        btn.setAttribute('aria-pressed', String(n === formRating));
+      });
+    }
+
+    els.ratingInput.addEventListener('click', (e) => {
+      const n = Number(e.target.closest('button')?.dataset.rate);
+      if (!n) return;
+      formRating = formRating === n ? 0 : n; // click same star again to clear
+      renderRatingInput();
+    });
+
+    function fillReadSelects(read) {
+      const f = els.form.elements;
+      const [y, m] = read ? read.split('-') : ['', ''];
+      const current = new Date().getFullYear();
+      const oldest = Math.min(1950, Number(y) || current);
+      const years = [];
+      for (let yr = current; yr >= oldest; yr--) years.push(yr);
+      f.readMonth.innerHTML = '<option value="">—</option>' +
+        MONTHS.map((name, i) => `<option value="${String(i + 1).padStart(2, '0')}">${name}</option>`).join('');
+      f.readYear.innerHTML = '<option value="">—</option>' +
+        years.map((yr) => `<option value="${yr}">${yr}</option>`).join('');
+      f.readMonth.value = m;
+      f.readYear.value = y;
+    }
+
+    // The Read date only applies to finished books.
+    function syncReadRow() {
+      const f = els.form.elements;
+      const finished = f.status.value === 'finished';
+      els.readRow.hidden = !finished;
+      if (finished && !f.readMonth.value && !f.readYear.value) fillReadSelects(thisMonth());
+    }
+
+    els.form.elements.status.addEventListener('change', syncReadRow);
+
+    // "YYYY-MM" when both month and year are picked for a finished book, otherwise empty.
+    function readValue(f) {
+      if (f.status.value !== 'finished' || !f.readMonth.value || !f.readYear.value) return '';
+      return `${f.readYear.value}-${f.readMonth.value}`;
+    }
+
+    // The current cover always stays in the list so it can be re-picked after a new search.
+    function renderCoverPicker() {
+      const choices = formCoverId && !formCoverChoices.includes(formCoverId)
+        ? [formCoverId, ...formCoverChoices]
+        : formCoverChoices;
+      els.coverPicker.innerHTML = choices.map((id, i) =>
+        `<button type="button" class="cover-choice" data-cover="${id}" aria-pressed="${id === formCoverId}"
+          aria-label="Cover option ${i + 1}"><img src="${coverUrl(id)}" alt="" loading="lazy"></button>`
+      ).join('') +
+        `<button type="button" class="cover-choice" data-cover="" aria-pressed="${!formCoverId}">No cover</button>`;
+    }
+
+    els.coverPicker.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      formCoverId = Number(btn.dataset.cover) || null;
+      formCoverPicked = true;
+      renderCoverPicker();
+    });
+
+    // Drop choices whose image fails to load.
+    els.coverPicker.addEventListener('error', (e) => {
+      const btn = e.target.closest?.('.cover-choice');
+      if (!btn) return;
+      const id = Number(btn.dataset.cover);
+      formCoverChoices = formCoverChoices.filter((c) => c !== id);
+      if (formCoverId === id) formCoverId = null;
+      btn.remove();
+    }, true);
+
+    async function searchCovers() {
+      const f = els.form.elements;
+      const query = { title: f.title.value.trim(), author: f.author.value.trim(), isbn: cleanIsbn(f.isbn.value) };
+      if (!query.title && !query.isbn) {
+        els.coverStatus.textContent = 'Enter a title or ISBN to find covers.';
+        return;
+      }
+      coverSearch?.abort();
+      const search = coverSearch = new AbortController();
+      els.coverStatus.textContent = 'Searching Open Library…';
+      try {
+        formCoverChoices = await findCovers(query, search.signal);
+      } catch (err) {
+        if (err.name !== 'AbortError') els.coverStatus.textContent = 'Couldn’t reach Open Library.';
+        return;
+      }
+      formCoverSearched = true;
+      const preselect = !formCoverId && !formCoverPicked && formCoverChoices.length > 0;
+      if (preselect) formCoverId = formCoverChoices[0];
+      els.coverStatus.textContent = !formCoverChoices.length ? 'No covers found.'
+        : preselect ? 'Best match selected — pick another if it’s wrong.'
+        : 'Pick a cover.';
+      renderCoverPicker();
+    }
+
+    els.coverSearchBtn.addEventListener('click', searchCovers);
+    ['title', 'author', 'isbn'].forEach((name) =>
+      els.form.elements[name].addEventListener('change', searchCovers)
+    );
+    els.dialog.addEventListener('close', () => coverSearch?.abort());
+
+    // `required` lets a spaces-only title through, so flag that as invalid too.
+    function checkTitle() {
+      const input = els.form.elements.title;
+      input.setCustomValidity(input.value && !input.value.trim() ? 'Please enter a title.' : '');
+    }
+    els.form.elements.title.addEventListener('input', checkTitle);
+
+    function openDialog(id = null) {
+      editingId = id;
+      const book = id ? findBook(id) : { status: filter !== 'all' ? filter : 'want' };
+      const f = els.form.elements;
+      els.dialogTitle.textContent = id ? 'Edit book' : 'Add book';
+      els.deleteBtn.hidden = !id;
+      f.title.value = book.title || '';
+      checkTitle();
+      f.author.value = book.author || '';
+      f.isbn.value = book.isbn || '';
+      f.status.value = book.status || 'want';
+      f.pages.value = book.pages || '';
+      f.currentPage.value = book.currentPage || '';
+      f.notes.value = book.notes || '';
+      fillReadSelects(book.read || '');
+      els.readRow.hidden = f.status.value !== 'finished';
+      formRating = book.rating || 0;
+      renderRatingInput();
+
+      formCoverId = book.coverId || null;
+      formCoverChoices = [];
+      formCoverSearched = false;
+      formCoverPicked = false;
+      els.coverStatus.textContent = '';
+      renderCoverPicker();
+
+      els.dialog.showModal();
+      f.title.focus();
+      if (id && !formCoverId) searchCovers();
+    }
+
+    els.form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = els.form.elements;
+      const data = {
+        title: f.title.value.trim(),
+        author: f.author.value.trim(),
+        isbn: cleanIsbn(f.isbn.value),
+        coverId: formCoverId,
+        // Once a search has run or a choice was made, the background lookup leaves this book alone.
+        coverChecked: formCoverSearched || formCoverPicked || !!formCoverId
+          || !!(editingId && findBook(editingId)?.coverChecked),
+        status: f.status.value,
+        pages: parseInt(f.pages.value, 10) || 0,
+        currentPage: parseInt(f.currentPage.value, 10) || 0,
+        read: readValue(f),
+        notes: f.notes.value.trim(),
+        rating: formRating,
+      };
+      if (!data.title) { // backstop in case the browser skipped validation
+        checkTitle();
+        f.title.reportValidity();
+        return;
+      }
+      if (data.pages) data.currentPage = Math.min(data.currentPage, data.pages);
+
+      if (editingId) {
+        updateBook(editingId, data);
+      } else {
+        const id = uid();
+        state.books.push({ id, createdAt: Date.now(), updatedAt: Date.now(), ...data });
+        lastAddedId = id;
+        save();
+        render();
+      }
+      els.dialog.close();
+      backfillCovers(); // in case Save beat the cover search
+    });
+
+    $('#cancelBtn').addEventListener('click', () => els.dialog.close());
+
+    els.deleteBtn.addEventListener('click', () => {
+      const book = findBook(editingId);
+      if (!book || !confirm(`Delete "${book.title}"?`)) return;
+      state.books = state.books.filter((b) => b.id !== editingId);
+      save();
+      render();
+      els.dialog.close();
+    });
+
+    // ---------- Toolbar ----------
+
+    $('#addBtn').addEventListener('click', () => openDialog());
+
+    els.tabs.addEventListener('click', (e) => {
+      const key = e.target.closest('button')?.dataset.filter;
+      if (!key) return;
+      filter = key;
+      render();
+    });
+
+    els.search.addEventListener('input', renderBooks);
+    els.sort.addEventListener('change', renderBooks);
+
+    // ---------- Import / export ----------
+
+    function download(content, filename, type) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([content], { type }));
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000); // Safari needs the URL briefly after click
+    }
+
+    function exportJson() {
+      download(JSON.stringify(state, null, 2), `reading-tracker-${today()}.json`, 'application/json');
+    }
+
+    // Quotes fields that need it, and defuses text Excel would run as a formula.
+    function csvCell(value) {
+      let s = String(value ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }
+
+    // All books (ignoring the filter and search), in the current sort order.
+    function exportCsv() {
+      const rows = [['Title', 'Author', 'Status', 'Date finished', 'Rating', 'Notes']];
+      for (const b of sortBooks([...state.books])) {
+        rows.push([b.title, b.author, STATUSES[b.status], b.read, b.rating || '', b.notes]);
+      }
+      const csv = rows.map((row) => row.map(csvCell).join(',')).join('\r\n');
+      // The BOM tells Excel the file is UTF-8, so accents and emoji survive.
+      download('﻿' + csv, `reading-tracker-${today()}.csv`, 'text/csv;charset=utf-8');
+    }
+
+    $('#exportBtn').addEventListener('click', exportJson);
+    $('#exportCsvBtn').addEventListener('click', exportCsv);
+
+    $('#importBtn').addEventListener('click', () => els.importFile.click());
+
+    els.importFile.addEventListener('change', async () => {
+      const file = els.importFile.files[0];
+      els.importFile.value = '';
+      if (!file) return;
+      let books, skipped;
+      try {
+        const data = JSON.parse(await file.text());
+        if (!Array.isArray(data?.books)) throw new Error('Missing "books" array');
+        ({ books, skipped } = normalize(data));
+      } catch (err) {
+        alert('Could not import file: ' + err.message);
+        return;
+      }
+      if (!books.length) {
+        alert('Could not import file: none of its books have a title.');
+        return;
+      }
+      const skipNote = skipped ? `\n\n${skipped} book(s) without a title will be skipped.` : '';
+      if (!confirm(`Replace your current ${state.books.length} book(s) with ${books.length} imported book(s)?${skipNote}`)) return;
+      state = { books };
+      save();
+      render();
+      backfillCovers();
+    });
+
+    // ---------- Other tabs ----------
+
+    // Another tab saved: adopt its list so this tab doesn't overwrite it on our next save.
+    window.addEventListener('storage', (e) => {
+      if (e.key !== STORAGE_KEY || e.newValue === null) return;
+      try {
+        const data = JSON.parse(e.newValue);
+        if (!Array.isArray(data?.books)) return;
+        state = { books: normalize(data).books };
+      } catch (err) {
+        return;
+      }
+      render();
+      if (els.dialog.open && editingId && !findBook(editingId)) els.dialog.close(); // deleted elsewhere
+    });
+
+    render();
+    checkStorage();
+    if (unreadableData !== null && noticeKind !== 'save-failed') showUnreadable();
+    backfillCovers();
+  </script>
+</body>
+</html>

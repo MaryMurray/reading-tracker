@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs and secrets
+*.log
+.env
+.env.*
+
+# In case a package manager or dev server is ever added
+node_modules/
+
+# Exported backups contain personal reading data
+reading-tracker-*.json
+reading-tracker-*.csv
+reading-tracker-unreadable-*.txt
+
+# Claude Code local settings
+.claude/settings.local.json
